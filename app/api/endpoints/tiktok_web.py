@@ -50,6 +50,132 @@ async def fetch_one_video(request: Request,
         raise HTTPException(status_code=status_code, detail=detail.dict())
 
 
+# 获取指定关键词的视频搜索结果
+@router.get("/fetch_keyword_search",
+            response_model=ResponseModel,
+            summary="获取指定关键词的视频搜索结果/Get keyword video search results")
+async def fetch_keyword_search(request: Request,
+                               keyword: str = Query(example="AI tools", description="关键词/Keyword"),
+                               cursor: int = Query(default=0, description="翻页游标/Page cursor"),
+                               count: int = Query(default=20, description="每页数量/Number per page"),
+                               sort_type: int = Query(default=0, description="排序类型/Sort type"),
+                               publish_time: int = Query(default=0, description="发布时间过滤/Publish time filter"),
+                               region: str = Query(default="US", description="地区/Region"),
+                               language: str = Query(default="en", description="语言/Language")):
+    """
+    # [中文]
+    ### 用途:
+    - 获取指定关键词的视频搜索原始结果
+    ### 参数:
+    - keyword: 搜索关键词
+    - cursor: 翻页游标
+    - count: 每页数量
+    - sort_type: 排序类型，默认0
+    - publish_time: 发布时间过滤，默认0
+    - region: 地区，默认US
+    - language: 语言，默认en
+    ### 返回:
+    - TikTok搜索原始结果
+
+    # [English]
+    ### Purpose:
+    - Get raw TikTok video search results for a keyword
+    ### Parameters:
+    - keyword: Search keyword
+    - cursor: Page cursor
+    - count: Number per page
+    - sort_type: Sort type, default 0
+    - publish_time: Publish time filter, default 0
+    - region: Region, default US
+    - language: Language, default en
+    ### Return:
+    - Raw TikTok search response
+    """
+    try:
+        data = await TikTokWebCrawler.fetch_keyword_search(
+            keyword, cursor, count, sort_type, publish_time, region, language
+        )
+        return ResponseModel(code=200,
+                             router=request.url.path,
+                             data=data)
+    except Exception as e:
+        status_code = 400
+        detail = ErrorResponseModel(code=status_code,
+                                    router=request.url.path,
+                                    params=dict(request.query_params),
+                                    )
+        raise HTTPException(status_code=status_code, detail=detail.dict())
+
+
+# 获取指定关键词的热点视频
+@router.get("/fetch_keyword_hot_videos",
+            response_model=ResponseModel,
+            summary="获取指定关键词的热点视频/Get keyword hot videos")
+async def fetch_keyword_hot_videos(request: Request,
+                                   keyword: str = Query(example="AI tools", description="关键词/Keyword"),
+                                   pages: int = Query(default=1, ge=1, le=10, description="抓取页数/Pages"),
+                                   cursor: int = Query(default=0, description="起始游标/Start cursor"),
+                                   count: int = Query(default=20, ge=1, le=50, description="每页数量/Number per page"),
+                                   limit: int = Query(default=20, ge=1, le=200, description="返回数量/Result limit"),
+                                   sort_by: str = Query(default="hot",
+                                                        description="排序字段: hot/play/like/comment/share/collect/create_time"),
+                                   sort_type: int = Query(default=0, description="搜索排序类型/Search sort type"),
+                                   publish_time: int = Query(default=0, description="发布时间过滤/Publish time filter"),
+                                   region: str = Query(default="US", description="地区/Region"),
+                                   language: str = Query(default="en", description="语言/Language"),
+                                   include_photos: bool = Query(default=False,
+                                                                description="是否包含图文作品/Include photo posts"),
+                                   include_raw: bool = Query(default=False,
+                                                            description="是否返回原始响应/Include raw pages")):
+    """
+    # [中文]
+    ### 用途:
+    - 按关键词搜索TikTok作品，并根据播放、点赞、评论、分享、收藏等指标计算热点排序
+    ### 参数:
+    - keyword: 搜索关键词
+    - pages: 抓取页数
+    - cursor: 起始游标
+    - count: 每页数量
+    - limit: 返回数量
+    - sort_by: hot/play/like/comment/share/collect/create_time
+    - include_photos: 是否包含图文作品，默认否
+    - include_raw: 是否返回TikTok原始响应，默认否
+    ### 返回:
+    - 标准化后的热点视频列表
+
+    # [English]
+    ### Purpose:
+    - Search TikTok by keyword and rank results by engagement metrics
+    ### Return:
+    - Normalized hot video list
+    """
+    try:
+        data = await TikTokWebCrawler.fetch_keyword_hot_videos(
+            keyword=keyword,
+            pages=pages,
+            cursor=cursor,
+            count=count,
+            limit=limit,
+            sort_by=sort_by,
+            sort_type=sort_type,
+            publish_time=publish_time,
+            region=region,
+            language=language,
+            include_photos=include_photos,
+            include_raw=include_raw,
+        )
+        return ResponseModel(code=200,
+                             router=request.url.path,
+                             data=data)
+    except Exception as e:
+        status_code = 400
+        detail = ErrorResponseModel(code=status_code,
+                                    router=request.url.path,
+                                    params=dict(request.query_params),
+                                    )
+        raise HTTPException(status_code=status_code, detail=detail.dict())
+
+
 # 获取用户的个人信息
 @router.get("/fetch_user_profile",
             response_model=ResponseModel,

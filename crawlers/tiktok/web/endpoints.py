@@ -15,6 +15,9 @@ class TikTokAPIEndpoints:
     # 首页推荐 (Home Recommend)
     HOME_RECOMMEND = f"{TIKTOK_DOMAIN}/api/recommend/item_list/"
 
+    # 关键词视频搜索 (Keyword Video Search)
+    SEARCH_ITEM_FULL = f"{TIKTOK_DOMAIN}/api/search/item/full/"
+
     # 用户详细信息 (User Detail Info)
     USER_DETAIL = f"{TIKTOK_DOMAIN}/api/user/detail/"
 

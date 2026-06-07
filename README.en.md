@@ -190,6 +190,8 @@ By checking in every day, you can get free quota. You can use my registration in
         -   [x] Get user homepage collection work data
         -   [x] 获取用户主页搜藏数据
         -   [x] Get user homepage playlist data
+        -   [x] Get keyword video search results
+        -   [x] Get keyword hot video list
         -   [x] Get single video comment data
         -   [x] Get the comment reply data of the specified video
         -   [x] Generate msToken

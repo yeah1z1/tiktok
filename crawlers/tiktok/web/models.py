@@ -44,6 +44,18 @@ class BaseRequestModel(BaseModel):
     msToken: str = TokenManager.gen_real_msToken()
 
 
+# 关键词视频搜索 (Keyword Video Search)
+class KeywordSearch(BaseRequestModel):
+    keyword: str
+    cursor: int = 0
+    count: int = 20
+    sort_type: int = 0
+    publish_time: int = 0
+    from_page: str = "search"
+    search_id: str = ""
+    data_collection_enabled: str = "true"
+
+
 # router model
 class UserProfile(BaseRequestModel):
     secUid: str = ""

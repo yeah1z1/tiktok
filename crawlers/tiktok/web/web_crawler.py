@@ -37,11 +37,19 @@ import asyncio  # 异步I/O
 import time  # 时间操作
 import yaml  # 配置文件
 import os  # 系统操作
+from urllib.parse import quote
 
 # 基础爬虫客户端和TikTokAPI端点
 from crawlers.base_crawler import BaseCrawler
 from crawlers.tiktok.web.endpoints import TikTokAPIEndpoints
 from crawlers.utils.utils import extract_valid_urls
+from crawlers.tiktok.web.hot_videos import (
+    extract_search_id,
+    get_next_cursor,
+    has_more_results,
+    normalize_search_items,
+    rank_hot_videos,
+)
 
 # TikTok加密参数生成器
 from crawlers.tiktok.web.utils import (
@@ -63,7 +71,8 @@ from crawlers.tiktok.web.models import (
     PostComment,
     PostCommentReply,
     UserFans,
-    UserFollow
+    UserFollow,
+    KeywordSearch
 )
 
 
@@ -77,20 +86,38 @@ with open(f"{path}/config.yaml", "r", encoding="utf-8") as f:
 
 class TikTokWebCrawler:
 
-    def __init__(self):
+    def __init__(self, cookie: str = "", proxies: dict = None):
         self.proxy_pool = None
+        self.cookie = cookie or os.getenv("TIKTOK_COOKIE", "")
+        self.proxies = proxies or {}
 
     # 从配置文件中获取TikTok的请求头
     async def get_tiktok_headers(self):
         tiktok_config = config["TokenManager"]["tiktok"]
+        headers = {
+            "User-Agent": tiktok_config["headers"]["User-Agent"],
+            "Referer": tiktok_config["headers"]["Referer"],
+            "Cookie": tiktok_config["headers"]["Cookie"],
+        }
+        if self.cookie:
+            headers["Cookie"] = self.cookie
+
+        proxies = {
+            "http://": tiktok_config["proxies"]["http"],
+            "https://": tiktok_config["proxies"]["https"],
+        }
+        proxies.update({key: value for key, value in self.proxies.items() if value})
+
+        http_proxy = os.getenv("TIKTOK_HTTP_PROXY")
+        https_proxy = os.getenv("TIKTOK_HTTPS_PROXY")
+        if http_proxy:
+            proxies["http://"] = http_proxy
+        if https_proxy:
+            proxies["https://"] = https_proxy
+
         kwargs = {
-            "headers": {
-                "User-Agent": tiktok_config["headers"]["User-Agent"],
-                "Referer": tiktok_config["headers"]["Referer"],
-                "Cookie": tiktok_config["headers"]["Cookie"],
-            },
-            "proxies": {"http://": tiktok_config["proxies"]["http"],
-                        "https://": tiktok_config["proxies"]["https"]}
+            "headers": headers,
+            "proxies": proxies,
         }
         return kwargs
 
@@ -111,6 +138,102 @@ class TikTokWebCrawler:
             )
             response = await crawler.fetch_get_json(endpoint)
         return response
+
+    # 获取指定关键词的视频搜索结果
+    async def fetch_keyword_search(
+            self,
+            keyword: str,
+            cursor: int = 0,
+            count: int = 20,
+            sort_type: int = 0,
+            publish_time: int = 0,
+            region: str = "US",
+            language: str = "en",
+            search_id: str = "",
+    ):
+        kwargs = await self.get_tiktok_headers()
+        base_crawler = BaseCrawler(proxies=kwargs["proxies"], crawler_headers=kwargs["headers"])
+        async with base_crawler as crawler:
+            params = KeywordSearch(
+                keyword=quote(keyword, safe=""),
+                cursor=cursor,
+                count=count,
+                sort_type=sort_type,
+                publish_time=publish_time,
+                region=region,
+                priority_region=region,
+                language=language,
+                app_language=language,
+                webcast_language=language,
+                search_id=search_id,
+            )
+            endpoint = BogusManager.model_2_endpoint(
+                TikTokAPIEndpoints.SEARCH_ITEM_FULL, params.dict(), kwargs["headers"]["User-Agent"]
+            )
+            response = await crawler.fetch_get_json(endpoint)
+        return response
+
+    # 获取指定关键词的热点视频
+    async def fetch_keyword_hot_videos(
+            self,
+            keyword: str,
+            pages: int = 1,
+            cursor: int = 0,
+            count: int = 20,
+            limit: int = 20,
+            sort_by: str = "hot",
+            sort_type: int = 0,
+            publish_time: int = 0,
+            region: str = "US",
+            language: str = "en",
+            include_photos: bool = False,
+            include_raw: bool = False,
+    ):
+        videos = []
+        raw_pages = []
+        next_cursor = cursor
+        search_id = ""
+        total_pages = max(pages, 1)
+
+        for page in range(total_pages):
+            response = await self.fetch_keyword_search(
+                keyword=keyword,
+                cursor=next_cursor,
+                count=count,
+                sort_type=sort_type,
+                publish_time=publish_time,
+                region=region,
+                language=language,
+                search_id=search_id,
+            )
+            page_videos = normalize_search_items(keyword, response)
+            videos.extend(page_videos)
+            if include_raw:
+                raw_pages.append(response)
+
+            search_id = extract_search_id(response) or search_id
+            fallback_cursor = next_cursor + count
+            new_cursor = get_next_cursor(response, fallback_cursor)
+            if not page_videos or not has_more_results(response):
+                next_cursor = new_cursor
+                break
+            next_cursor = new_cursor
+
+        ranked_videos = rank_hot_videos(videos, sort_by=sort_by, include_photos=include_photos)
+        if limit > 0:
+            ranked_videos = ranked_videos[:limit]
+
+        result = {
+            "keyword": keyword,
+            "cursor": next_cursor,
+            "pages_requested": total_pages,
+            "total": len(ranked_videos),
+            "sort_by": sort_by,
+            "videos": ranked_videos,
+        }
+        if include_raw:
+            result["raw_pages"] = raw_pages
+        return result
 
     # 获取用户的个人信息
     async def fetch_user_profile(self, secUid: str, uniqueId: str):
